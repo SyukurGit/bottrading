@@ -1,9 +1,11 @@
 # handlers/analysis.py
+
+from telegram import ReplyKeyboardMarkup, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler
 from utils.cooldown import is_on_cooldown, update_cooldown
 from utils.api_helper import get_token_data
 from utils.ai_helper import analyze_token
-from utils.chart_helper import generate_candlestick_chart # Impor fungsi chart
+from utils.chart_helper import generate_candlestick_chart
 
 async def start_analysis_callback(update, context):
     query = update.callback_query
@@ -17,14 +19,15 @@ async def start_analysis_callback(update, context):
     
     try:
         token = context.user_data.get('token')
-        timeframe_display = [k for k, v in context.user_data.get('TIMEFRAMES', {}).items() if v == context.user_data.get('timeframe')][0]
+        timeframe_display_map = context.user_data.get('TIMEFRAMES', {})
         timeframe_value = context.user_data.get('timeframe')
+        timeframe_display = [k for k, v in timeframe_display_map.items() if v == timeframe_value][0] or timeframe_value
 
         if not token or not timeframe_value:
             await query.message.reply_text("❌ Terjadi kesalahan: Token atau timeframe tidak ditemukan. Silakan mulai ulang dengan /start.")
             return
 
-        # 1. Ambil data OHLC dari CoinGecko
+        # 1. Ambil data OHLC
         ohlc_data = get_token_data(token, timeframe_value)
         if not ohlc_data:
             await query.message.reply_text(f"Gagal mendapatkan data untuk {token}. Mungkin token tidak didukung CoinGecko.")
@@ -38,16 +41,26 @@ async def start_analysis_callback(update, context):
                 photo=chart_image,
                 caption=f"Chart Candlestick untuk {token.upper()}/USDT ({timeframe_display})"
             )
-        else:
-            await context.bot.send_message(chat_id=query.message.chat_id, text="Gagal membuat chart.")
 
         # 3. Analisis dengan AI
         await context.bot.send_message(chat_id=query.message.chat_id, text="Menganalisis data dengan AI...")
-        result = analyze_token(token, timeframe_display, ohlc_data) # Kirim data OHLC ke AI
+        result = analyze_token(token, timeframe_display, ohlc_data)
         
         # 4. Kirim hasil analisis
         await query.message.reply_text(result)
         update_cooldown(user_id)
+
+        # ===== BLOK PERUBAHAN DIMULAI DI SINI =====
+        
+        # 5. Berikan tombol untuk kembali ke pemilihan token
+        keyboard = [["Pilih Token Lain"]] # Teks tombol diubah
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="Analisis selesai. Klik tombol di bawah untuk menganalisis token lain.", # Teks pesan diubah
+            reply_markup=reply_markup
+        )
+        # ===== BLOK PERUBAHAN SELESAI =====
 
     except Exception as e:
         print(f"An error occurred in start_analysis_callback: {e}")
