@@ -39,7 +39,10 @@ def analyze_token_and_get_trendlines(symbol: str, timeframe: str, kline_data: li
     Jika Anda tidak dapat mengidentifikasi garis tren yang jelas, kembalikan array kosong untuk "trendlines".
     """
 
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key={GEMINI_API_KEY}"
+    # ===== BARIS PERBAIKAN DI BAWAH INI =====
+    # URL diubah dari 'gemini-1.5-flash-latest' menjadi 'gemini-1.5-flash'
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    
     headers = {"Content-Type": "application/json"}
     body = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.5}}
 
@@ -49,20 +52,18 @@ def analyze_token_and_get_trendlines(symbol: str, timeframe: str, kline_data: li
         
         full_response_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
         
-        # Pisahkan analisis teks dan data JSON
         if "---JSON_SEPARATOR---" in full_response_text:
             parts = full_response_text.split("---JSON_SEPARATOR---", 1)
             text_analysis = parts[0].strip()
             json_str = parts[1].strip()
             
-            # Parsing data JSON untuk garis tren
             try:
                 trendline_data = json.loads(json_str)
                 return text_analysis, trendline_data.get("trendlines", [])
             except json.JSONDecodeError:
-                return text_analysis, [] # Jika JSON tidak valid, kembalikan list kosong
+                return text_analysis, []
         else:
-            return full_response_text, [] # Jika separator tidak ada
+            return full_response_text, []
 
     except Exception as e:
         print(f"Error saat menghubungi Gemini API: {e}")
