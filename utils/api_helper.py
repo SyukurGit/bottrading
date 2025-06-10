@@ -1,38 +1,49 @@
 # utils/api_helper.py
 
 import requests
-from config import COINGECKO_API_URL
 
-# KAMUS UNTUK MAPPING SIMBOL KE ID COINGECKO
-COINGECKO_ID_MAP = {
-    "BTC": "bitcoin",
-    "ETH": "ethereum",
-    "BNB": "binancecoin",
-    "SOLANA": "solana"
-}
+# URL API resmi dari Binance
+BINANCE_API_URL = "https://api.binance.com/api/v3/klines"
 
-def get_token_data(symbol: str, timeframe: str):
+def get_binance_kline_data(symbol: str, timeframe: str):
     """
-    Mengambil data OHLC dari CoinGecko.
-    Timeframe: '1h', '24h', '7d'
+    Mengambil data Kline (OHLCV) dari Binance API.
     """
-    days_map = {
-        '1h': '1',
-        '24h': '1',
-        '7d': '7',
+    # Mapping timeframe kita ke interval yang dimengerti Binance
+    interval_map = {
+        '1h': '1h',   # 1 Jam
+        '24h': '4h',  # Untuk 24 jam, kita ambil data 4-jam-an agar tidak terlalu padat
+        '7d': '1d',   # Untuk Long Term, kita ambil data harian
     }
-    days = days_map.get(timeframe, '1')
+    interval = interval_map.get(timeframe, '1h')
+    
+    # Binance menggunakan format simbol seperti 'BTCUSDT'
+    formatted_symbol = symbol.upper() + "USDT"
 
-    # GUNAKAN MAPPING UNTUK MENDAPATKAN ID YANG BENAR
-    # Jika simbol ada di map, gunakan ID-nya. Jika tidak, coba gunakan simbol lowercase (untuk token kustom)
-    token_id = COINGECKO_ID_MAP.get(symbol.upper(), symbol.lower())
-
+    # Ambil 100 candle terakhir untuk interval yang dipilih
     params = {
-        'vs_currency': 'usd',
-        'days': days
+        'symbol': formatted_symbol,
+        'interval': interval,
+        'limit': 100 
     }
     
-    # URL sekarang akan menggunakan ID yang benar (misal: 'bitcoin' bukan 'btc')
-    res = requests.get(f"{COINGECKO_API_URL}/coins/{token_id}/ohlc", params=params)
-    res.raise_for_status()
-    return res.json()
+    try:
+        res = requests.get(BINANCE_API_URL, params=params)
+        res.raise_for_status()
+        
+        # Binance memberikan data dalam format list. Kita perlu memformatnya.
+        # [open_time, open, high, low, close, volume, ...]
+        processed_data = []
+        for kline in res.json():
+            processed_data.append({
+                "time": kline[0],
+                "open": float(kline[1]),
+                "high": float(kline[2]),
+                "low": float(kline[3]),
+                "close": float(kline[4]),
+                "volume": float(kline[5])
+            })
+        return processed_data
+    except requests.exceptions.RequestException as e:
+        print(f"Gagal mengambil data dari Binance: {e}")
+        return None
