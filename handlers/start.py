@@ -12,4 +12,3 @@ async def start(update, context):
     await update.message.reply_text("✅ Selamat datang!", reply_markup=reply_markup)
     return SELECTING_ACTION # Kembalikan state pertama
 
-# Hapus fungsi register_start
