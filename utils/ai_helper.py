@@ -4,67 +4,46 @@ import requests
 import json
 from config import GEMINI_API_KEY
 
-def analyze_token_and_get_trendlines(symbol: str, timeframe: str, kline_data: list):
+def get_professional_analysis(symbol: str, timeframe: str, kline_data: list, funding_rate: str, long_short_ratio: str):
     """
-    Menganalisis data, memberikan teks analisis, dan juga data JSON untuk garis tren.
+    Meminta AI untuk mengisi template laporan analisis profesional (HANYA TEKS).
     """
-    recent_data = kline_data[-50:] # Kirim 50 data poin terakhir ke AI
-    
+    recent_kline = kline_data[-50:]
+
     prompt = f"""
-    Anda adalah seorang analis teknikal trading profesional. Lakukan dua hal:
-    
-    1.  **Berikan Analisis Teks**: Tulis analisis komprehensif untuk pasangan {symbol}/USDT dalam timeframe {timeframe} berdasarkan data kline (OHLC) berikut. Analisis harus mencakup identifikasi tren, level support dan resistance utama, serta potensi sinyal trading.
-    
-    2.  **Berikan Data Garis Tren (JSON)**: Berdasarkan analisis Anda, identifikasi maksimal 2 garis tren paling signifikan (bisa support atau resistance). Sajikan data garis ini dalam format JSON yang ketat di bawah ini. Garis harus menghubungkan dua titik (titik awal dan akhir). Setiap titik didefinisikan oleh timestamp (ms) dan harga. Gunakan timestamp dari data yang diberikan.
+    Anda adalah seorang Analis Kripto Profesional. Tugas Anda adalah membuat laporan analisis yang ringkas dan profesional untuk pasangan {symbol}/USDT dengan timeframe {timeframe}.
 
-    Berikut adalah data Kline (timestamp, open, high, low, close, volume):
-    {json.dumps(recent_data, indent=2)}
+    Gunakan data di bawah ini:
+    - Data Candlestick (OHLC): {json.dumps(recent_kline)}
+    - Funding Rate Saat Ini: {funding_rate}
+    - Global Long/Short Ratio: {long_short_ratio}
 
-    Format output WAJIB seperti ini, pisahkan analisis teks dan JSON dengan "---JSON_SEPARATOR---":
+    Isi template laporan di bawah ini dengan analisis Anda dalam format Markdown. Berikan angka yang spesifik dan jelas untuk setiap level harga. JANGAN mengubah format template.
 
-    [ANALISIS TEKS ANDA DI SINI]
-    ---JSON_SEPARATOR---
-    {{
-      "trendlines": [
-        {{
-          "type": "support/resistance",
-          "points": [
-            {{ "timestamp": [timestamp_awal], "price": [harga_awal] }},
-            {{ "timestamp": [timestamp_akhir], "price": [harga_akhir] }}
-          ]
-        }}
-      ]
-    }}
+    --- TEMPLATE LAPORAN ---
+    📈 **Hasil Analisa Lengkap untuk {symbol}/USDT ({timeframe})**
 
-    Jika Anda tidak dapat mengidentifikasi garis tren yang jelas, kembalikan array kosong untuk "trendlines".
+    * **Entry Price:** $[harga_entry]
+    * **Stop Loss:** $[harga_sl]
+    * **Take Profit 1:** $[harga_tp1]
+    * **Take Profit 2:** $[harga_tp2]
+    * **Take Profit 3:** $[harga_tp3]
+
+    ---
+    📊 **Ringkasan Analisis**
+
+    * **Analisa Candle & Chart Pattern:** [Analisis ringkas Anda di sini. Sebutkan pola yang teridentifikasi.]
+    * **Analisa Data Pasar:** [Analisis ringkas berdasarkan Funding Rate dan Long/Short Ratio.]
     """
 
-    # ===== BARIS PERBAIKAN DI BAWAH INI =====
-    # URL diubah dari 'gemini-1.5-flash-latest' menjadi 'gemini-1.5-flash'
     url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-    
     headers = {"Content-Type": "application/json"}
-    body = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.5}}
+    body = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.6}}
 
     try:
-        res = requests.post(url, headers=headers, json=body, timeout=45)
+        res = requests.post(url, headers=headers, json=body, timeout=60)
         res.raise_for_status()
-        
-        full_response_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
-        
-        if "---JSON_SEPARATOR---" in full_response_text:
-            parts = full_response_text.split("---JSON_SEPARATOR---", 1)
-            text_analysis = parts[0].strip()
-            json_str = parts[1].strip()
-            
-            try:
-                trendline_data = json.loads(json_str)
-                return text_analysis, trendline_data.get("trendlines", [])
-            except json.JSONDecodeError:
-                return text_analysis, []
-        else:
-            return full_response_text, []
-
+        return res.json()["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as e:
         print(f"Error saat menghubungi Gemini API: {e}")
-        return f"Terjadi kesalahan pada layanan AI: {e}", []
+        return f"Terjadi kesalahan pada layanan AI: {e}"

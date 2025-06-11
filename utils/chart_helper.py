@@ -4,40 +4,44 @@ import pandas as pd
 import mplfinance as mpf
 import io
 
-def generate_candlestick_chart(kline_data: list, token: str, timeframe_display: str, trendlines=None):
+def generate_candlestick_chart(kline_data: list, token: str, timeframe_display: str, hlines_data=None, alines_data=None):
     """
-    Membuat gambar candlestick chart dari data Kline Binance.
-    Bisa juga menggambar garis tren jika diberikan.
+    Membuat gambar candlestick chart. Menerima data hlines dan alines secara eksplisit.
     """
     if not kline_data:
         return None
 
     try:
-        # Konversi data ke pandas DataFrame
         df = pd.DataFrame(kline_data)
         df['time'] = pd.to_datetime(df['time'], unit='ms')
         df.set_index('time', inplace=True)
+        df = df[['open', 'high', 'low', 'close', 'volume']].apply(pd.to_numeric)
 
-        # Siapkan argumen untuk plot
-        chart_title = f"{token.upper()}/USDT - {timeframe_display}"
+        # Siapkan argumen dasar untuk plot
+        chart_title = f"\n{token.upper()}/USDT - {timeframe_display}"
         plot_kwargs = {
             "type": 'candle',
-            "style": 'binance', # Gunakan style yang lebih menarik
+            "style": 'charles',
             "title": chart_title,
             "ylabel": 'Harga (USD)',
-            "volume": True, # Tampilkan volume
-            "mav": (10, 20), # Tambahkan Moving Average periode 10 dan 20
-            "figratio": (12, 7),
-            "scale_padding": 0.5
+            "volume": True,
+            "mav": (10, 20),
+            "figratio": (24, 12),
+            "scale_padding": 0.3,
+            "warn_too_much_data": 99999,
+            "tight_layout": True,
         }
 
-        # Jika ada data trendline, tambahkan ke plot
-        if trendlines:
-            plot_kwargs['alines'] = trendlines
+        # Jika ada data hlines (TP/SL), tambahkan langsung ke plot
+        if hlines_data:
+            plot_kwargs['hlines'] = hlines_data
+        
+        # Jika ada data alines (trendline diagonal), tambahkan langsung ke plot
+        if alines_data:
+            plot_kwargs['alines'] = alines_data
 
-        # Buat chart
         buf = io.BytesIO()
-        mpf.plot(df, **plot_kwargs, savefig=dict(fname=buf, dpi=120, pad_inches=0.25))
+        mpf.plot(df, **plot_kwargs, savefig=dict(fname=buf, dpi=120, pad_inches=0.1))
         
         buf.seek(0)
         return buf
