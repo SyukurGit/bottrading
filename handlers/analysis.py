@@ -12,7 +12,6 @@ from utils.chart_helper import generate_candlestick_chart
 import pandas as pd
 
 def parse_analysis_for_levels(text: str) -> dict:
-    """Mengekstrak level harga (TP/SL/Entry) dari teks analisis AI."""
     levels = {}
     patterns = {
         'entry': r"Entry Price.*?\$\s*([\d,]+\.?\d*)",
@@ -46,7 +45,6 @@ async def start_analysis_callback(update, context):
         timeframe_display_map = context.user_data.get('TIMEFRAMES', {})
         timeframe_display = [k for k, v in timeframe_display_map.items() if v == timeframe_value][0] or timeframe_value
 
-        # 1. Ambil data pasar
         await query.edit_message_text(f"Mengambil data pasar untuk {token}...")
         kline_data = get_binance_kline_data(token, timeframe_value)
         if not kline_data:
@@ -55,29 +53,22 @@ async def start_analysis_callback(update, context):
         funding_rate = get_funding_rate(token)
         long_short_ratio = get_long_short_ratio(token)
 
-        # 2. Kirim CHART PERTAMA (bersih)
         clean_chart_image = generate_candlestick_chart(kline_data, token, timeframe_display)
         if clean_chart_image:
             await context.bot.send_photo(chat_id=query.message.chat_id, photo=clean_chart_image, caption=f"Chart Candlestick untuk {token.upper()}/USDT ({timeframe_display})")
         
-        # 3. Minta analisis dari AI
         await context.bot.send_message(chat_id=query.message.chat_id, text="Membuat laporan analisis profesional...")
         text_analysis = get_professional_analysis(token, timeframe_display, kline_data, funding_rate, long_short_ratio)
 
-        # 4. Kirim hasil analisis TEKS
         try:
             await context.bot.send_message(chat_id=query.message.chat_id, text=text_analysis, parse_mode=ParseMode.MARKDOWN)
         except BadRequest:
             await context.bot.send_message(chat_id=query.message.chat_id, text=text_analysis)
 
-        # 5. Ekstrak level harga dan buat CHART KEDUA dengan anotasi
         price_levels = parse_analysis_for_levels(text_analysis)
         if price_levels:
             hlines_list, colors_list, styles_list = [], [], []
-            level_map = {
-                'entry': ('b', '--'), 'sl': ('r', '--'),
-                'tp1': ('g', ':'), 'tp2': ('g', ':'), 'tp3': ('g', ':')
-            }
+            level_map = {'entry': ('b', '--'), 'sl': ('r', '--'), 'tp1': ('g', ':'), 'tp2': ('g', ':'), 'tp3': ('g', ':')}
             for key, (color, style) in level_map.items():
                 if key in price_levels:
                     hlines_list.append(price_levels[key])
@@ -85,9 +76,9 @@ async def start_analysis_callback(update, context):
                     styles_list.append(style)
             
             if hlines_list:
+                # Menggunakan nama parameter yang benar: 'linestyle' (tanpa 's')
                 hlines_data_for_chart = dict(hlines=hlines_list, colors=colors_list, linestyles=styles_list)
                 
-                # Memanggil fungsi chart dengan parameter hlines_data yang sudah benar
                 annotated_chart_image = generate_candlestick_chart(
                     kline_data, 
                     token, 
@@ -100,7 +91,6 @@ async def start_analysis_callback(update, context):
 
         update_cooldown(user_id)
         
-        # 6. Kirim tombol untuk memulai lagi
         keyboard = [["Pilih Token Lain"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
         await context.bot.send_message(chat_id=query.message.chat_id, text="Analisis selesai.", reply_markup=reply_markup)
