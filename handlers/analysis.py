@@ -1,14 +1,14 @@
 # handlers/analysis.py
 
 import re
-# ===== PERUBAHAN DIMULAI DI SINI =====
 from telegram import ReplyKeyboardMarkup
 from telegram.constants import ParseMode
-# ===== PERUBAHAN SELESAI =====
 from telegram.ext import CallbackQueryHandler
 from telegram.error import BadRequest
 from utils.cooldown import is_on_cooldown, update_cooldown
-from utils.api_helper import get_binance_kline_data, get_funding_rate, get_long_short_ratio
+# ===== PERUBAHAN DIMULAI DI SINI =====
+from utils.api_helper import get_binance_kline_data, get_funding_rate, get_long_short_ratio, get_coingecko_coin_data
+# ===== PERUBAHAN SELESAI =====
 from utils.ai_helper import get_professional_analysis
 from utils.chart_helper import generate_candlestick_chart
 import pandas as pd
@@ -48,6 +48,45 @@ async def start_analysis_callback(update, context):
         timeframe_display = [k for k, v in timeframe_display_map.items() if v == timeframe_value][0] or timeframe_value
 
         await query.edit_message_text(f"Mengambil data pasar untuk {token}...")
+        
+        # ===== BLOK BARU DIMULAI DI SINI =====
+        
+        # 1. Ambil data profil dari CoinGecko
+        coin_profile = get_coingecko_coin_data(token)
+        
+        # 2. Jika data berhasil didapat, format dan kirim pesannya
+        if coin_profile:
+            # Fungsi untuk format angka agar mudah dibaca
+            def format_number(num):
+                if num is None or num == 0:
+                    return "N/A"
+                if num > 1:
+                    return f"${num:,.2f}"
+                return f"${num:,.8f}"
+
+            profile_text = (
+                f"📊 ** > > {coin_profile['name']} ({token.upper()})**\n\n"
+                f"{coin_profile['description']}\n\n"
+                f"▪️ **Harga Sekarang :** `{format_number(coin_profile['current_price'])}`\n"
+                f"▪️ **Kapitalisasi Pasar :** `{format_number(coin_profile['market_cap'])}`\n"
+                f"▪️ **Volume Perdagangan (24j) :** `{format_number(coin_profile['total_volume'])}`\n"
+                f"▪️ **Total Supply :** `{int(coin_profile['total_supply']):,}`"
+            )
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=profile_text,
+                parse_mode=ParseMode.MARKDOWN
+            )
+        else:
+            # Kirim pesan jika data profil tidak ditemukan, tapi tetap lanjutkan analisis
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=f"_Info profil untuk {token.upper()} tidak ditemukan, melanjutkan analisis teknikal..._",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            
+        # ===== BLOK BARU SELESAI =====
+            
         kline_data = get_binance_kline_data(token, timeframe_value)
 
         if not kline_data:
@@ -67,9 +106,9 @@ async def start_analysis_callback(update, context):
 
         clean_chart_image = generate_candlestick_chart(kline_data, token, timeframe_display)
         if clean_chart_image:
-            await context.bot.send_photo(chat_id=query.message.chat_id, photo=clean_chart_image, caption=f"Chart Candlestick untuk {token.upper()}/USDT ({timeframe_display})")
+            await context.bot.send_photo(chat_id=query.message.chat_id, photo=clean_chart_image, caption=f"Chart Candlestick > {token.upper()}/USDT ({timeframe_display})")
 
-        await context.bot.send_message(chat_id=query.message.chat_id, text="Membuat laporan analisis profesional...")
+        await context.bot.send_message(chat_id=query.message.chat_id, text="Membuat dan Mengumpulkan data laporan analisis ...")
         text_analysis = get_professional_analysis(token, timeframe_display, kline_data, funding_rate, long_short_ratio)
 
         try:

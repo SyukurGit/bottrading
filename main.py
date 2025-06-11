@@ -12,10 +12,13 @@ from telegram.ext import (
 
 # Impor fungsi handler Anda
 from handlers.start import start
-from handlers.token_select import token_prompt, token_select # token_prompt diimpor
+from handlers.token_select import token_prompt, token_select
 from handlers.timeframe_select import timeframe_select
 from handlers.analysis import start_analysis_callback
 from utils.db import init_db
+# ===== PERUBAHAN DIMULAI DI SINI =====
+from utils.coin_list import load_coin_list
+# ===== PERUBAHAN SELESAI =====
 
 # Definisikan state untuk ConversationHandler
 SELECTING_ACTION, SELECTING_TOKEN, SELECTING_TIMEFRAME = range(3)
@@ -24,16 +27,19 @@ def main():
     logging.basicConfig(
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
     )
+    
+    # ===== PERUBAHAN DIMULAI DI SINI =====
+    # Muat daftar koin dari CoinGecko ke memori saat bot start
+    load_coin_list()
+    # ===== PERUBAHAN SELESAI =====
+    
     init_db()
     app = ApplicationBuilder().token("7207657126:AAF53TTiNB_VIQcl_8bk5DfYKgZ6laX8izU").build()
 
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start),
-            # ===== PERUBAHAN DIMULAI DI SINI =====
-            # Tambahkan handler untuk tombol "Pilih Token Lain" sebagai entry point baru
             MessageHandler(filters.Regex('^Pilih Token Lain$'), token_prompt)
-            # ===== PERUBAHAN SELESAI =====
         ],
         states={
             SELECTING_ACTION: [
@@ -50,12 +56,7 @@ def main():
     )
 
     app.add_handler(conv_handler)
-    
-    # Handler analisis tetap di luar karena dipicu setelah conversation selesai
     app.add_handler(CallbackQueryHandler(start_analysis_callback, pattern="start_analysis"))
-    
-    # Handler di bawah ini sudah tidak diperlukan karena sudah dimasukkan sebagai entry_point
-    # app.add_handler(MessageHandler(filters.Regex('^Mulai Analisis Baru$'), start))
     
     print("Bot is running...")
     app.run_polling()
