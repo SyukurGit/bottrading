@@ -1,9 +1,11 @@
 # handlers/analysis.py
 
 import re
+# ===== PERUBAHAN DIMULAI DI SINI =====
 from telegram import ReplyKeyboardMarkup
-from telegram.ext import CallbackQueryHandler
 from telegram.constants import ParseMode
+# ===== PERUBAHAN SELESAI =====
+from telegram.ext import CallbackQueryHandler
 from telegram.error import BadRequest
 from utils.cooldown import is_on_cooldown, update_cooldown
 from utils.api_helper import get_binance_kline_data, get_funding_rate, get_long_short_ratio
@@ -33,7 +35,7 @@ def parse_analysis_for_levels(text: str) -> dict:
 async def start_analysis_callback(update, context):
     query = update.callback_query
     await query.answer("Memproses analisis lengkap...")
-    
+
     try:
         user_id = query.from_user.id
         if is_on_cooldown(user_id):
@@ -47,16 +49,26 @@ async def start_analysis_callback(update, context):
 
         await query.edit_message_text(f"Mengambil data pasar untuk {token}...")
         kline_data = get_binance_kline_data(token, timeframe_value)
+
         if not kline_data:
-            await query.edit_message_text(f"Gagal mendapatkan data candlestick dari Binance untuk {token}.")
+            error_message = f"Gagal mendapatkan data candlestick dari Binance untuk `{token.upper()}`. Token mungkin tidak valid atau tidak terdaftar."
+            await query.edit_message_text(text=error_message, parse_mode=ParseMode.MARKDOWN)
+            keyboard = [["Pilih Token Lain"]]
+            reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="Silakan coba lagi dengan token yang berbeda.",
+                reply_markup=reply_markup
+            )
             return
+
         funding_rate = get_funding_rate(token)
         long_short_ratio = get_long_short_ratio(token)
 
         clean_chart_image = generate_candlestick_chart(kline_data, token, timeframe_display)
         if clean_chart_image:
             await context.bot.send_photo(chat_id=query.message.chat_id, photo=clean_chart_image, caption=f"Chart Candlestick untuk {token.upper()}/USDT ({timeframe_display})")
-        
+
         await context.bot.send_message(chat_id=query.message.chat_id, text="Membuat laporan analisis profesional...")
         text_analysis = get_professional_analysis(token, timeframe_display, kline_data, funding_rate, long_short_ratio)
 
@@ -74,23 +86,22 @@ async def start_analysis_callback(update, context):
                     hlines_list.append(price_levels[key])
                     colors_list.append(color)
                     styles_list.append(style)
-            
+
             if hlines_list:
-                # Menggunakan nama parameter yang benar: 'linestyle' (tanpa 's')
                 hlines_data_for_chart = dict(hlines=hlines_list, colors=colors_list, linestyles=styles_list)
-                
+
                 annotated_chart_image = generate_candlestick_chart(
-                    kline_data, 
-                    token, 
-                    timeframe_display, 
+                    kline_data,
+                    token,
+                    timeframe_display,
                     hlines_data=hlines_data_for_chart
                 )
-                
+
                 if annotated_chart_image:
                     await context.bot.send_photo(chat_id=query.message.chat_id, photo=annotated_chart_image, caption="Chart dengan Anotasi Level Sinyal")
 
         update_cooldown(user_id)
-        
+
         keyboard = [["Pilih Token Lain"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
         await context.bot.send_message(chat_id=query.message.chat_id, text="Analisis selesai.", reply_markup=reply_markup)
